@@ -7,6 +7,7 @@ from xl_helper import read_excel, read_rows
 
 # Function to compare and sync columns between two files
 async def compare_and_sync_columns(old_file, new_file, allow_delete=False):
+    print(f"Comparing and syncing columns between {old_file} and {new_file}")
     old_sheet_data = await read_excel(old_file)
     new_sheet_data = await read_excel(new_file)
 

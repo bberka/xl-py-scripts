@@ -29,38 +29,28 @@ async def read_excel(file_path):
         return []
 
 
-async def read_rows(file_path, sheet_name):
+async def read_rows(file_path: str, sheet_name: str, read_header_only=False):
     """
-    Asynchronously reads the rows of a specific sheet in the Excel file.
-    :param file_path: str, path to the Excel file.
-    :param sheet_name: str, name of the sheet to read.
-    :return: list of rows (each row is a tuple of cell values).
+    Reads rows from an Excel sheet, optionally only reading the first row.
+    
+    :param file_path: Path to the Excel file.
+    :param sheet_name: Name of the sheet to read.
+    :param read_header_only: If True, reads only the first row (header).
+    :return: A list of rows (list of lists).
     """
-    try:
-        # Open the Excel file asynchronously
-        async with aiofiles.open(file_path, mode='rb') as f:
-            content = await f.read()
-
-        # Write the content into a temporary file that openpyxl can read
-        with open(file_path, 'wb') as temp_file:
-            temp_file.write(content)
-
-        # Load the Excel workbook using openpyxl
-        wb = openpyxl.load_workbook(file_path)
-
-        # Check if the sheet exists
-        if sheet_name not in wb.sheetnames:
-            raise ValueError(f"Sheet '{sheet_name}' not found in the Excel file.")
-
-        # Get the sheet and read its rows
-        sheet = wb[sheet_name]
-        rows = []
+    wb = openpyxl.load_workbook(file_path, read_only=True)
+    sheet = wb[sheet_name]
+    
+    rows = []
+    
+    if read_header_only:
+        # Read only the first row (header row)
+        for row in sheet.iter_rows(min_row=1, max_row=1, values_only=True):
+            rows.append(list(row))
+    else:
+        # Read all rows
         for row in sheet.iter_rows(values_only=True):
-            rows.append(row)
-
-        return rows
-
-    except Exception as e:
-        print(f"Error reading the sheet '{sheet_name}': {e}")
-        return []
+            rows.append(list(row))
+    
+    return rows
 
