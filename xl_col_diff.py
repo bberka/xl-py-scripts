@@ -8,6 +8,7 @@ import openpyxl
 
 # Function to compare and sync columns between two files
 async def compare_and_sync_columns(old_file, new_file, allow_delete=False, ignore_sheet_regex=None):
+    print(f"Comparing columns between: {old_file} and {new_file}")
     old_sheet_data = await read_excel(old_file)
     new_sheet_data = await read_excel(new_file)
 
