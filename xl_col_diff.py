@@ -12,12 +12,12 @@ async def compare_and_sync_columns(old_file, new_file, allow_delete=False, ignor
     new_sheet_data = await read_excel(new_file)
 
     # Iterate through the sheet names in both files
-    for sheet_name in new_sheet_data:  # Check for all sheets in the new file
+    for sheet_name in new_sheet_data:
         if ignore_sheet_regex and re.match(ignore_sheet_regex, sheet_name):
             print(f"Ignoring sheet: {sheet_name} (matches ignore regex)")
-            continue  # Skip this sheet if it matches the ignore regex
+            continue
 
-        if sheet_name in old_sheet_data:  # Check if the sheet exists in the old file
+        if sheet_name in old_sheet_data:
             print(f"Comparing columns in sheet: {sheet_name}")
 
             # Read only the header (first row) of the old and new sheet
@@ -28,38 +28,28 @@ async def compare_and_sync_columns(old_file, new_file, allow_delete=False, ignor
             old_headers = old_rows[0] if old_rows else []
             new_headers = new_rows[0] if new_rows else []
 
+            wb_old = openpyxl.load_workbook(old_file)
+            sheet_old = wb_old[sheet_name]
+
             # Compare headers and add missing columns to the old file
             for new_header in new_headers:
                 if new_header not in old_headers:
                     print(f"Column '{new_header}' is missing in the old file, adding it.")
                     # Add missing column to the old header row
                     old_headers.append(new_header)
-                    
+
                     # Add the new column to all rows of the old sheet (initializing with empty values)
-                    wb_old = openpyxl.load_workbook(old_file)
-                    sheet_old = wb_old[sheet_name]
+                    # Iterate from the header (row 1) to the last row
+                    for row_idx in range(1, sheet_old.max_row + 1):  # Iterate through ALL rows
+                        sheet_old.cell(row=row_idx, column=len(old_headers), value=None)  # Add new empty column
 
-                    for row_idx in range(len(old_rows)):
-                        sheet_old.cell(row=row_idx + 1, column=len(old_headers), value=None)  # Add new empty column
-
-
-
-            # After ensuring the headers match, update the data (rows) accordingly
-            # Now that we have the updated old_headers, update the rows in the old file
-            for row_idx, row in enumerate(old_rows):
-                for col_idx, new_header in enumerate(new_headers):
-                    if new_header not in old_headers:
-                        # Add the new value (from new file) to the corresponding row and column in the old sheet
-                        sheet_old.cell(row=row_idx + 1, column=len(old_headers), value=new_rows[row_idx][col_idx])
-
-            wb_old.save(old_file)
+            wb_old.save(old_file)  # Save the workbook *after* adding all columns
             print(f"Columns synchronized for sheet: {sheet_name}")
 
         else:
             print(f"Sheet '{sheet_name}' does not exist in the old file. Skipping...")
 
     print("Comparison and sync completed.")
-
 
 # Function to traverse directories and compare files
 def compare_directory_files(old_dir, new_dir, allow_delete=False, ignore_file_regex=None, ignore_sheet_regex=None):
