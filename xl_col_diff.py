@@ -1,13 +1,12 @@
 import argparse
 import asyncio
 import os
-import openpyxl
 from xl_helper import read_excel, read_rows
+import openpyxl
 
 
 # Function to compare and sync columns between two files
 async def compare_and_sync_columns(old_file, new_file, allow_delete=False):
-    print(f"Comparing and syncing columns between {old_file} and {new_file}")
     old_sheet_data = await read_excel(old_file)
     new_sheet_data = await read_excel(new_file)
 
@@ -16,50 +15,39 @@ async def compare_and_sync_columns(old_file, new_file, allow_delete=False):
         if sheet_name in old_sheet_data:  # Check if the sheet exists in the old file
             print(f"Comparing columns in sheet: {sheet_name}")
 
-            # Read the rows of the old and new sheet
-            old_rows = await read_rows(old_file, sheet_name)
-            new_rows = await read_rows(new_file, sheet_name)
+            # Read only the header (first row) of the old and new sheet
+            old_rows = await read_rows(old_file, sheet_name, read_header_only=True)
+            new_rows = await read_rows(new_file, sheet_name, read_header_only=True)
 
-            # Check column lengths and add missing columns in the old file
-            old_column_count = len(old_rows[0]) if old_rows else 0
-            new_column_count = len(new_rows[0]) if new_rows else 0
+            # Get the list of headers (columns) in both old and new sheet
+            old_headers = old_rows[0] if old_rows else []
+            new_headers = new_rows[0] if new_rows else []
 
-            if new_column_count > old_column_count:
-                print(f"Adding {new_column_count - old_column_count} columns to {sheet_name}")
-                
-                for row_idx in range(len(old_rows)):
-                    if allow_delete:
-                        # Append new columns at the end if allow_delete is True
-                        old_rows[row_idx] += new_rows[row_idx][old_column_count:new_column_count]
-                    else:
-                        # Insert new columns at the correct position (shift columns to the right)
-                        for col_idx in range(old_column_count, new_column_count):
-                            old_rows[row_idx].insert(col_idx, new_rows[row_idx][col_idx])
+            # Compare headers and add missing columns to the old file
+            for new_header in new_headers:
+                if new_header not in old_headers:
+                    print(f"Column '{new_header}' is missing in the old file, adding it.")
+                    # Add missing column to the old header row
+                    old_headers.append(new_header)
+                    
+                    # Add the new column to all rows of the old sheet (initializing with empty values)
+                    wb_old = openpyxl.load_workbook(old_file)
+                    sheet_old = wb_old[sheet_name]
 
-                # Update the old file with the new columns
-                wb_old = openpyxl.load_workbook(old_file)
-                sheet_old = wb_old[sheet_name]
+                    for row_idx in range(len(old_rows)):
+                        sheet_old.cell(row=row_idx + 1, column=len(old_headers), value=None)  # Add new empty column
 
-                for row_idx, row in enumerate(old_rows):
-                    for col_idx, value in enumerate(row):
-                        sheet_old.cell(row=row_idx + 1, column=col_idx + 1, value=value)
+                    wb_old.save(old_file)
 
-                wb_old.save(old_file)
-                print(f"Columns added to {sheet_name} in the old file")
+            # After ensuring the headers match, update the data (rows) accordingly
+            # Now that we have the updated old_headers, update the rows in the old file
+            for row_idx, row in enumerate(old_rows):
+                for col_idx, new_header in enumerate(new_headers):
+                    if new_header not in old_headers:
+                        # Add the new value (from new file) to the corresponding row and column in the old sheet
+                        sheet_old.cell(row=row_idx + 1, column=len(old_headers), value=new_rows[row_idx][col_idx])
 
-            # If deletions are allowed, check if columns in the old file don't exist in the new file
-            if allow_delete and new_column_count < old_column_count:
-                columns_to_delete = old_column_count - new_column_count
-                print(f"Deleting {columns_to_delete} columns from {sheet_name} in the old file")
-
-                wb_old = openpyxl.load_workbook(old_file)
-                sheet_old = wb_old[sheet_name]
-
-                for col in range(old_column_count, new_column_count, -1):
-                    sheet_old.delete_cols(col)
-
-                wb_old.save(old_file)
-                print(f"Columns deleted from {sheet_name} in the old file")
+            print(f"Columns synchronized for sheet: {sheet_name}")
 
         else:
             print(f"Sheet '{sheet_name}' does not exist in the old file. Skipping...")
