@@ -42,7 +42,7 @@ async def compare_and_sync_columns(old_file, new_file, allow_delete=False, ignor
                     for row_idx in range(len(old_rows)):
                         sheet_old.cell(row=row_idx + 1, column=len(old_headers), value=None)  # Add new empty column
 
-                    wb_old.save(old_file)
+
 
             # After ensuring the headers match, update the data (rows) accordingly
             # Now that we have the updated old_headers, update the rows in the old file
@@ -52,6 +52,7 @@ async def compare_and_sync_columns(old_file, new_file, allow_delete=False, ignor
                         # Add the new value (from new file) to the corresponding row and column in the old sheet
                         sheet_old.cell(row=row_idx + 1, column=len(old_headers), value=new_rows[row_idx][col_idx])
 
+            wb_old.save(old_file)
             print(f"Columns synchronized for sheet: {sheet_name}")
 
         else:
