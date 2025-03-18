@@ -60,9 +60,9 @@ async def compare_and_sync_columns(
             logging.info(f"New headers: {new_headers}")
 
             # Add missing columns to old_sheet
-            for col_num, header in enumerate(new_headers, start=1):
-                if header not in old_headers:
-                    if sync_type == "rightmost":
+            if sync_type == "rightmost":
+                for header in new_headers:
+                    if header not in old_headers:
                         # Add to the rightmost column
                         insert_position = old_sheet.max_column + 1
                         old_sheet.cell(row=1, column=insert_position, value=header)
@@ -71,7 +71,9 @@ async def compare_and_sync_columns(
                             f"Added column '{header}' to sheet '{sheet_name}' at the rightmost"
                         )
 
-                    elif sync_type == "moverows":
+            elif sync_type == "moverows":
+                for col_num, header in enumerate(new_headers, start=1):
+                    if header not in old_headers:
                         # Insert column and shift rows
                         insert_position = col_num
                         old_sheet.insert_cols(insert_position)
