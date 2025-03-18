@@ -3,8 +3,7 @@ import asyncio
 import os
 import re
 import openpyxl
-import logging  # Changed from xl_helper
-
+import logging
 
 # Configure logging (if not already configured)
 logging.basicConfig(
@@ -13,7 +12,7 @@ logging.basicConfig(
 
 
 async def compare_and_sync_columns(
-    old_file, new_file, allow_delete, ignore_sheet_regex=None
+    old_file, new_file, allow_delete, sync_type, ignore_sheet_regex=None
 ):
     """
     Compares and synchronizes columns between two Excel files.
@@ -22,8 +21,14 @@ async def compare_and_sync_columns(
         old_file (str): Path to the old Excel file.
         new_file (str): Path to the new Excel file.
         allow_delete (bool): Whether to allow deletion of columns in the old file.
+        sync_type (str): 'rightmost' or 'moverows' to specify how to add new columns.
         ignore_sheet_regex (str, optional): Regex pattern to ignore sheets. Defaults to None.
     """
+
+    if sync_type not in ("rightmost", "moverows"):
+        raise ValueError(
+            "Invalid sync_type. Must be 'rightmost' or 'moverows'."
+        )
 
     try:
         old_wb = openpyxl.load_workbook(old_file)
@@ -57,9 +62,24 @@ async def compare_and_sync_columns(
             # Add missing columns to old_sheet
             for col_num, header in enumerate(new_headers, start=1):
                 if header not in old_headers:
-                    old_sheet.cell(row=1, column=len(old_headers) + 1, value=header)
-                    old_headers.append(header)  # Update old_headers
-                    logging.info(f"Added column '{header}' to sheet '{sheet_name}'")
+                    if sync_type == "rightmost":
+                        # Add to the rightmost column
+                        insert_position = old_sheet.max_column + 1
+                        old_sheet.cell(row=1, column=insert_position, value=header)
+                        old_headers.append(header)
+                        logging.info(
+                            f"Added column '{header}' to sheet '{sheet_name}' at the rightmost"
+                        )
+
+                    elif sync_type == "moverows":
+                        # Insert column and shift rows
+                        insert_position = col_num
+                        old_sheet.insert_cols(insert_position)
+                        old_sheet.cell(row=1, column=insert_position, value=header)
+                        old_headers.insert(insert_position - 1, header)
+                        logging.info(
+                            f"Added column '{header}' to sheet '{sheet_name}' at position {insert_position} (shifting rows)"
+                        )
 
             # Delete columns from old_sheet if allow_delete is True
             if allow_delete:
@@ -81,11 +101,14 @@ async def compare_and_sync_columns(
 
             # Rename columns in old_sheet to match new_sheet
             for col_num, header in enumerate(new_headers, start=1):
-                if old_headers[col_num - 1] != header:
-                    old_sheet.cell(row=1, column=col_num, value=header)
-                    logging.info(
-                        f"Renamed column '{old_headers[col_num - 1]}' to '{header}' in sheet '{sheet_name}'"
-                    )
+                if (
+                    col_num <= len(old_headers)
+                ):  # Check if the column exists in the old sheet
+                    if old_headers[col_num - 1] != header:
+                        old_sheet.cell(row=1, column=col_num, value=header)
+                        logging.info(
+                            f"Renamed column '{old_headers[col_num - 1]}' to '{header}' in sheet '{sheet_name}'"
+                        )
 
         old_wb.save(old_file)
         logging.info(f"Successfully synchronized columns in file: {old_file}")
@@ -101,6 +124,7 @@ def compare_directory_files(
     old_dir,
     new_dir,
     allow_delete=False,
+    sync_type=None,
     ignore_file_regex=None,
     ignore_sheet_regex=None,
 ):
@@ -125,6 +149,7 @@ def compare_directory_files(
                             old_file_path,
                             os.path.join(root, file_name),
                             allow_delete,
+                            sync_type,
                             ignore_sheet_regex,
                         )
                     )
@@ -152,6 +177,12 @@ def main():
         help="Allow deletion of columns in the old file.",
     )
     parser.add_argument(
+        "--sync-type",
+        choices=["rightmost", "moverows"],
+        default="rightmost",
+        help="How to sync columns: 'rightmost' (add to end) or 'moverows' (insert and shift)",
+    )
+    parser.add_argument(
         "--ignore-sheet-regex",
         type=str,
         help="Regex pattern to ignore sheets during comparison.",
@@ -168,6 +199,7 @@ def main():
     new_file = args.new_file
     allow_delete = args.allow_delete
     check_directory = args.check_directory
+    sync_type = args.sync_type
     ignore_sheet_regex = args.ignore_sheet_regex
     ignore_file_regex = args.ignore_file_regex
 
@@ -178,7 +210,12 @@ def main():
             return
 
         compare_directory_files(
-            old_file, new_file, allow_delete, ignore_file_regex, ignore_sheet_regex
+            old_file,
+            new_file,
+            allow_delete,
+            sync_type,
+            ignore_file_regex,
+            ignore_sheet_regex,
         )
     else:
         # Otherwise, compare the single files directly
@@ -188,7 +225,7 @@ def main():
 
         asyncio.run(
             compare_and_sync_columns(
-                old_file, new_file, allow_delete, ignore_sheet_regex
+                old_file, new_file, allow_delete, sync_type, ignore_sheet_regex
             )
         )
 
