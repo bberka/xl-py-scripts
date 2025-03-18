@@ -1,17 +1,22 @@
 import argparse
 import asyncio
 import os
+import re
 from xl_helper import read_excel, read_rows
 import openpyxl
 
 
 # Function to compare and sync columns between two files
-async def compare_and_sync_columns(old_file, new_file, allow_delete=False):
+async def compare_and_sync_columns(old_file, new_file, allow_delete=False, ignore_sheet_regex=None):
     old_sheet_data = await read_excel(old_file)
     new_sheet_data = await read_excel(new_file)
 
     # Iterate through the sheet names in both files
     for sheet_name in new_sheet_data:  # Check for all sheets in the new file
+        if ignore_sheet_regex and re.match(ignore_sheet_regex, sheet_name):
+            print(f"Ignoring sheet: {sheet_name} (matches ignore regex)")
+            continue  # Skip this sheet if it matches the ignore regex
+
         if sheet_name in old_sheet_data:  # Check if the sheet exists in the old file
             print(f"Comparing columns in sheet: {sheet_name}")
 
@@ -56,9 +61,13 @@ async def compare_and_sync_columns(old_file, new_file, allow_delete=False):
 
 
 # Function to traverse directories and compare files
-def compare_directory_files(old_dir, new_dir, allow_delete=False):
+def compare_directory_files(old_dir, new_dir, allow_delete=False, ignore_file_regex=None, ignore_sheet_regex=None):
     for root, dirs, files in os.walk(new_dir):
         for file_name in files:
+            if ignore_file_regex and re.match(ignore_file_regex, file_name):
+                print(f"Ignoring file: {file_name} (matches ignore regex)")
+                continue  # Skip this file if it matches the ignore regex
+
             if file_name.endswith(('.xlsx', '.xls')):  # Check if it's an Excel file
                 # Get relative file path
                 relative_path = os.path.relpath(os.path.join(root, file_name), new_dir)
@@ -67,7 +76,7 @@ def compare_directory_files(old_dir, new_dir, allow_delete=False):
                 # Check if the file exists in both directories
                 if os.path.exists(old_file_path):
                     print(f"Comparing: {old_file_path} and {os.path.join(root, file_name)}")
-                    asyncio.run(compare_and_sync_columns(old_file_path, os.path.join(root, file_name), allow_delete))
+                    asyncio.run(compare_and_sync_columns(old_file_path, os.path.join(root, file_name), allow_delete, ignore_sheet_regex))
 
 
 # Main function to parse arguments and execute the script
@@ -77,6 +86,8 @@ def main():
     parser.add_argument('--new-file', required=True, help="Path to the new Excel file or directory.")
     parser.add_argument('--check-directory', action='store_true', help="Specify if the paths are directories to compare Excel files inside.")
     parser.add_argument('--allow-delete', action='store_true', help="Allow deletion of columns in the old file.")
+    parser.add_argument('--ignore-sheet-regex', type=str, help="Regex pattern to ignore sheets during comparison.")
+    parser.add_argument('--ignore-file-regex', type=str, help="Regex pattern to ignore files during comparison.")
 
     args = parser.parse_args()
 
@@ -84,6 +95,8 @@ def main():
     new_file = args.new_file
     allow_delete = args.allow_delete
     check_directory = args.check_directory
+    ignore_sheet_regex = args.ignore_sheet_regex
+    ignore_file_regex = args.ignore_file_regex
 
     # If the paths are directories, compare all files inside them
     if check_directory:
@@ -91,14 +104,14 @@ def main():
             print("Both paths must be directories when using --check-directory.")
             return
 
-        compare_directory_files(old_file, new_file, allow_delete)
+        compare_directory_files(old_file, new_file, allow_delete, ignore_file_regex, ignore_sheet_regex)
     else:
         # Otherwise, compare the single files directly
         if not os.path.exists(old_file) or not os.path.exists(new_file):
             print("One or both of the provided files do not exist.")
             return
 
-        asyncio.run(compare_and_sync_columns(old_file, new_file, allow_delete))
+        asyncio.run(compare_and_sync_columns(old_file, new_file, allow_delete, ignore_sheet_regex))
 
 
 if __name__ == "__main__":
