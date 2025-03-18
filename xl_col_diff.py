@@ -101,16 +101,7 @@ async def compare_and_sync_columns(
                     cell.value for cell in old_sheet[1]
                 ]  # row index starts from 1
 
-            # Rename columns in old_sheet to match new_sheet
-            for col_num, header in enumerate(new_headers, start=1):
-                if (
-                    col_num <= len(old_headers)
-                ):  # Check if the column exists in the old sheet
-                    if old_headers[col_num - 1] != header:
-                        old_sheet.cell(row=1, column=col_num, value=header)
-                        logging.info(
-                            f"Renamed column '{old_headers[col_num - 1]}' to '{header}' in sheet '{sheet_name}'"
-                        )
+    
 
         old_wb.save(old_file)
         logging.info(f"Successfully synchronized columns in file: {old_file}")
